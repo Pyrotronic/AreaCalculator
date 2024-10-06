@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+spec:
+  replicas: 3  # Минимум 3 пода для стабильной нагрузки
+  selector:
+    matchLabels:
+      app: web-app
+  template:
+    metadata:
+      labels:
+        app: web-app
+    spec:
+      containers:
+      - name: web-app-container
+        image: your-app-image:latest
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "128Mi"  # Минимальные ресурсы по памяти
+            cpu: "100m"      # Минимальное потребление CPU в стабильной фазе
+          limits:
+            memory: "128Mi"  # Лимит памяти не нужен, так как потребление стабильно
+            cpu: "500m"      # Лимит CPU для пикового времени старта
+        startupProbe:
+          httpGet:
+            path: /healthz  # Указываем путь для проверки готовности контейнера
+            port: 80
+          failureThreshold: 3
+          periodSeconds: 5   # Пробуем каждые 5 секунд
+          initialDelaySeconds: 5  # Ждем 5 секунд перед первой проверкой
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 10  # Начинаем проверку через 10 секунд после старта
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 10
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 1
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - web-app
+              topologyKey: "kubernetes.io/hostname"
+              
+      tolerations:
+      - key: "dedicated"
+        operator: "Equal"
+        value: "web"
+        effect: "NoSchedule"
